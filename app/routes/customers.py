@@ -2,8 +2,8 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 
 from app.database import (
     AuditLog,
@@ -26,8 +26,8 @@ router = APIRouter(tags=["Customers"])
 
 
 class CreateCustomerReq(BaseModel):
-    name: str
-    phone: str | None = None
+    name: str = Field(max_length=100)
+    phone: str | None = Field(default=None, max_length=20)
 
 
 @router.post("/customers")
@@ -75,8 +75,8 @@ def customer_ledger(customer_id: int, owner_id: str = Depends(current_owner)):
 
 class TransactionPatch(BaseModel):
     amount_paise: int | None = None
-    item_desc: str | None = None
-    transaction_type: str | None = None
+    item_desc: str | None = Field(default=None, max_length=200)
+    transaction_type: str | None = Field(default=None, max_length=20)
 
 
 @router.patch("/transactions/{tx_id}")
@@ -176,7 +176,10 @@ def merge(req: MergeReq, owner_id: str = Depends(current_owner)):
 
 
 @router.get("/audit")
-def get_audit_log(limit: int = 100, owner_id: str = Depends(current_owner)):
+def get_audit_log(
+    limit: int = Query(100, ge=1, le=500),  # noqa: B008
+    owner_id: str = Depends(current_owner),
+):
     """Owner's own audit log."""
     with get_db() as db:
         rows = (

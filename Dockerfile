@@ -14,7 +14,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY app/ ./app/
-COPY run.py .
 
 # Create runtime directories
 RUN mkdir -p /app/data /app/data/backups /app/logs /app/exports \

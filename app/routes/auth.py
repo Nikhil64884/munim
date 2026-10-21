@@ -6,6 +6,7 @@ POST /api/auth/verify-otp
 """
 
 import datetime
+import hmac
 import logging
 import time
 
@@ -15,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from app.config import config
 from app.database import AccountDeletion, get_db
+from app.privacy import mask_phone
 from app.services.otp import send_otp, verify_firebase_id_token, verify_otp
 
 logger = logging.getLogger("MunimJi.routes.auth")
@@ -130,7 +132,7 @@ def send(req: SendOtpReq, request: Request):
         raise HTTPException(500, "Could not send OTP.")
     resp: dict = {"status": "sent", "phone": phone}
     # In dev mode, return the OTP so the Flutter UI can show it to the user
-    if config.OTP_PROVIDER == "dev":
+    if config.OTP_PROVIDER == "dev" and not config.IS_PROD:
         resp["otp"] = config.DEV_OTP
         resp["test_otp"] = config.DEV_OTP
     return resp
@@ -147,9 +149,10 @@ def verify(req: VerifyOtpReq, request: Request):
         config.REVIEW_PHONE
         and config.REVIEW_OTP
         and phone == _normalize_phone(config.REVIEW_PHONE)
-        and req.otp == config.REVIEW_OTP
+        and req.otp is not None
+        and hmac.compare_digest(req.otp.encode(), config.REVIEW_OTP.encode())
     ):
-        logger.warning(f"Review login: {phone}")
+        logger.warning(f"Review login: {mask_phone(phone)}")
         return {"token": _issue_token(phone), "phone": phone}
 
     if config.OTP_PROVIDER == "firebase":

@@ -14,6 +14,7 @@ from collections import defaultdict
 from fastapi import Request
 
 from app.config import config
+from app.privacy import mask_phone
 
 logger = logging.getLogger("MunimJi.security")
 
@@ -50,7 +51,7 @@ def is_rate_limited(
             now,
             limit=config.MAX_REQUESTS_PER_MINUTE,
         ):
-            logger.warning(f"Rate limit hit for owner={owner_id}")
+            logger.warning(f"Rate limit hit for owner={mask_phone(owner_id)}")
             return True
 
     # ---- IP check ----

@@ -27,6 +27,7 @@ from app.database import (
 )
 from app.export_utils import generate_excel, get_owner_export_token
 from app.money import format_inr
+from app.privacy import mask_phone
 from app.routes.auth import current_owner
 
 logger = logging.getLogger("MunimJi.routes.mobile_api")
@@ -109,7 +110,7 @@ def _safe_export_path(filename: str, owner_id: str) -> str:
     expected_token = get_owner_export_token(owner_id)
     parts = filename.split("_")
     if len(parts) < 5 or parts[1] != expected_token:
-        logger.warning(f"Rejected export access (owner mismatch): {filename!r} by owner={owner_id}")
+        logger.warning(f"Rejected export access (owner mismatch): {filename!r} by owner={mask_phone(owner_id)}")
         raise HTTPException(403, "Access denied. You do not own this export file.")
 
     # 3. Normalize and confirm containment
@@ -149,7 +150,7 @@ def delete_account(owner_id: str = Depends(current_owner)):
         db.query(Customer).filter_by(owner_id=owner_id).delete()
         db.add(AccountDeletion(owner_id=owner_id))
         db.commit()
-    logger.warning(f"Account deleted: {owner_id}")
+    logger.warning(f"Account deleted: {mask_phone(owner_id)}")
     return {
         "status": "deleted",
         "retention_note": "Soft-deleted; removed after 30 days.",

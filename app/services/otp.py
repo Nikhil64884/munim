@@ -9,6 +9,7 @@ OTP provider abstraction: twilio | firebase | dev.
 import logging
 
 from app.config import config
+from app.privacy import mask_phone
 
 logger = logging.getLogger("MunimJi.services.otp")
 
@@ -21,7 +22,7 @@ def send_otp(phone: str) -> bool:
     if config.OTP_PROVIDER == "twilio":
         return _twilio_send(phone)
     if config.OTP_PROVIDER == "dev":
-        logger.warning(f"[DEV] OTP for {phone}: {config.DEV_OTP}")
+        logger.warning(f"[DEV] OTP requested for {mask_phone(phone)}")
         return True
     if config.OTP_PROVIDER == "firebase":
         # Client SDK handles sending; backend does nothing
@@ -80,7 +81,7 @@ def _twilio_send(phone: str) -> bool:
         client = Client(config.TWILIO_ACCOUNT_SID, config.TWILIO_AUTH_TOKEN)
         client.verify.v2.services(config.TWILIO_VERIFY_SERVICE_SID) \
             .verifications.create(to=phone, channel="sms")
-        logger.info(f"OTP sent to {phone} via Twilio")
+        logger.info(f"OTP sent to {mask_phone(phone)} via Twilio")
         return True
     except Exception as e:
         logger.error(f"Twilio send OTP failed: {e}", exc_info=True)

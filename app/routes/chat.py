@@ -15,6 +15,7 @@ from app.database import forget_message_processed, mark_message_processed
 from app.engine import handle_message
 from app.export_utils import generate_excel
 from app.messages import msg
+from app.privacy import mask_phone
 from app.routes.auth import current_owner
 from app.security import is_rate_limited
 from app.services.voice import transcribe_upload
@@ -29,7 +30,7 @@ router = APIRouter(tags=["Chat"])
 # ---------------------------------------------------------------------------
 class ChatReq(BaseModel):
     message: str = Field(min_length=1, max_length=1000)
-    client_msg_id: str | None = None
+    client_msg_id: str | None = Field(default=None, max_length=100)
 
 
 class ChatResp(BaseModel):
@@ -58,7 +59,7 @@ async def _maybe_generate_export(reply: str, owner_id: str) -> tuple[str, str | 
 
     filename = await asyncio.to_thread(generate_excel, owner_id)
     if not filename:
-        logger.error(f"Export failed for owner={owner_id}")
+        logger.error(f"Export failed for owner={mask_phone(owner_id)}")
         return msg("EXPORT_FAIL"), None
 
     # Guard: sanity check filename
@@ -118,7 +119,7 @@ async def voice(
     # Transcription (with size/MIME/extension validation)
     transcript, err = await transcribe_upload(file)
     if not transcript:
-        logger.warning(f"Voice rejected for owner={owner_id}: {err}")
+        logger.warning(f"Voice rejected for owner={mask_phone(owner_id)}: {err}")
         raise HTTPException(400, err or msg("VOICE_ERROR"))
 
     # Process the transcribed text

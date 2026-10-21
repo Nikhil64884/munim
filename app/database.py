@@ -34,6 +34,7 @@ from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker
 
 from app.config import config
 from app.money import validate_amount_paise
+from app.privacy import mask_phone
 
 logger = logging.getLogger("MunimJi.database")
 
@@ -124,6 +125,7 @@ class Customer(Base):
     owner_id = Column(String, index=True, nullable=False)
     name = Column(String, nullable=False)
     name_lower = Column(String, nullable=False, index=True)
+    party_type = Column(String, default="customer", server_default="customer", nullable=False)
     created_at = Column(DateTime, default=utc_now, nullable=False)
 
     __table_args__ = (
@@ -301,7 +303,26 @@ def migrate_legacy_data():
     """Idempotent migration. Safe on every startup."""
     with get_db() as db:
         _migrate_amount_column(db)
+        _migrate_party_type_column(db)
         _migrate_customers(db)
+
+
+def _migrate_party_type_column(db):
+    try:
+        cols = [r[1] for r in db.execute(text("PRAGMA table_info(customers)")).fetchall()]
+    except Exception:
+        return
+    if "party_type" not in cols:
+        db.execute(text("ALTER TABLE customers ADD COLUMN party_type VARCHAR DEFAULT 'customer'"))
+        db.commit()
+        logger.info("Added party_type column to customers.")
+    db.execute(
+        text(
+            "UPDATE customers SET party_type = 'customer' "
+            "WHERE party_type IS NULL OR party_type = ''"
+        )
+    )
+    db.commit()
 
 
 def _migrate_amount_column(db):
@@ -406,11 +427,14 @@ def cleanup_old_processed_messages(older_than_hours: int = 48):
 # ---------------------------------------------------------------------------
 # Customers
 # ---------------------------------------------------------------------------
-def get_or_create_customer(owner_id: str, name: str) -> int:
+def get_or_create_customer(owner_id: str, name: str, party_type: str = "customer") -> int:
     """Return customer_id. Case-insensitive. Creates if missing."""
     name = sanitize_input_text(name, max_len=100)
     if not name:
         raise ValueError("Customer name cannot be empty.")
+    party_type = (party_type or "customer").strip().lower()
+    if party_type not in {"customer", "supplier", "other"}:
+        party_type = "customer"
     lower = name.lower()
     with get_db() as db:
         row = db.execute(
@@ -422,10 +446,10 @@ def get_or_create_customer(owner_id: str, name: str) -> int:
         try:
             db.execute(
                 text(
-                    "INSERT INTO customers (owner_id, name, name_lower, created_at) "
-                    "VALUES (:o, :n, :nl, :t)"
+                    "INSERT INTO customers (owner_id, name, name_lower, party_type, created_at) "
+                    "VALUES (:o, :n, :nl, :pt, :t)"
                 ),
-                {"o": owner_id, "n": name, "nl": lower, "t": utc_now()},
+                {"o": owner_id, "n": name, "nl": lower, "pt": party_type, "t": utc_now()},
             )
             db.commit()
         except IntegrityError:
@@ -454,13 +478,10 @@ def find_similar_customers(owner_id: str, name: str, limit: int = 5) -> list[dic
         return [{"id": r[0], "name": r[1]} for r in rows]
 
 
-def list_customers_with_balance(owner_id: str) -> list[dict]:
+def list_customers_with_balance(owner_id: str, party_type: str | None = None) -> list[dict]:
     """Every customer with net balance (paise). Sorted by owed DESC."""
-    with get_db() as db:
-        rows = db.execute(
-            text(
-                """
-            SELECT c.id, c.name,
+    query = """
+            SELECT c.id, c.name, COALESCE(c.party_type, 'customer') AS party_type,
               COALESCE(SUM(CASE WHEN t.transaction_type IN ('Debit','Sale')
                                 THEN t.amount_paise ELSE 0 END), 0) AS owed,
               COALESCE(SUM(CASE WHEN t.transaction_type = 'Credit'
@@ -469,14 +490,25 @@ def list_customers_with_balance(owner_id: str) -> list[dict]:
             LEFT JOIN transactions t
               ON t.customer_id = c.id AND t.is_deleted = 0
             WHERE c.owner_id = :o
-            GROUP BY c.id, c.name
+    """
+    params = {"o": owner_id}
+    if party_type and party_type.strip().lower() != "all":
+        query += " AND LOWER(COALESCE(c.party_type, 'customer')) = :pt"
+        params["pt"] = party_type.strip().lower()
+
+    query += """
+            GROUP BY c.id, c.name, c.party_type
             ORDER BY (owed - paid) DESC
-        """
-            ),
-            {"o": owner_id},
-        ).fetchall()
+    """
+    with get_db() as db:
+        rows = db.execute(text(query), params).fetchall()
     return [
-        {"id": r[0], "name": r[1], "balance_paise": int((r[2] or 0) - (r[3] or 0))}
+        {
+            "id": r[0],
+            "name": r[1],
+            "party_type": r[2] or "customer",
+            "balance_paise": int((r[3] or 0) - (r[4] or 0)),
+        }
         for r in rows
     ]
 
@@ -537,7 +569,7 @@ def add_transaction(
         db.commit()
         db.refresh(t)
         logger.info(
-            f"Tx id={t.id} owner={owner_id} cust={customer_name} "
+            f"Tx id={t.id} owner={mask_phone(owner_id)} cust={customer_name} "
             f"paise={amount_paise} type={type_}"
         )
         return t.id

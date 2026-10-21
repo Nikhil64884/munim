@@ -9,6 +9,7 @@ import json
 import logging
 
 from app.database import AuditLog
+from app.privacy import mask_phone
 
 logger = logging.getLogger("MunimJi.audit")
 
@@ -43,7 +44,7 @@ def audit_log(
         )
         db.add(entry)
         db.commit()
-        logger.info(f"[AUDIT] {action} {entity}#{entity_id or '-'} by {owner_id}")
+        logger.info(f"[AUDIT] {action} {entity}#{entity_id or '-'} by {mask_phone(owner_id)}")
     except Exception as e:
         # Audit failure must NEVER crash the main operation
         logger.error(f"Audit log failed: {e}", exc_info=True)

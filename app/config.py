@@ -199,10 +199,27 @@ class _Config:
                 raise ValueError(
                     "❌ JWT_SECRET must be at least 32 characters in production."
                 )
-            if self.REVIEW_OTP == "123456":
+            if self.REVIEW_OTP and self._is_weak_review_otp(self.REVIEW_OTP):
                 raise ValueError(
-                    "❌ In production, REVIEW_OTP cannot be the weak default '123456'."
+                    "❌ In production, REVIEW_OTP must be 6-8 characters and not "
+                    "easy to guess (e.g. not 123456, 111111 or 654321)."
                 )
+
+    @staticmethod
+    def _is_weak_review_otp(otp: str) -> bool:
+        """True if the review-account OTP is unusable or trivially guessable.
+
+        The login API accepts at most 8 characters, so longer values can never match.
+        """
+        if len(otp) < 6 or len(otp) > 8:
+            return True
+        if len(set(otp)) == 1:  # 111111
+            return True
+        if otp.isascii() and otp.isdigit():
+            steps = {int(b) - int(a) for a, b in zip(otp, otp[1:], strict=False)}
+            if steps <= {1} or steps <= {-1}:  # 123456 / 654321
+                return True
+        return False
 
     # -----------------------------------------------------------------------
     # Required-var helpers
