@@ -142,8 +142,15 @@ def download_export(filename: str, owner_id: str = Depends(current_owner)):
 def delete_account(owner_id: str = Depends(current_owner)):
     now_utc = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
     with get_db() as db:
+        # Scrub PII immediately on account deletion
         db.query(Transaction).filter_by(owner_id=owner_id).update(
-            {"is_deleted": 1, "deleted_at": now_utc, "customer_id": None}
+            {
+                "is_deleted": 1,
+                "deleted_at": now_utc,
+                "customer_id": None,
+                "item_desc": "[ANONYMIZED]",
+                "raw_text": None,
+            }
         )
         db.query(PendingContext).filter_by(sender_id=owner_id).delete()
         db.query(Inventory).filter_by(owner_id=owner_id).delete()

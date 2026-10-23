@@ -48,7 +48,7 @@ class _Config:
 
     def __init__(self):
         # ---- Environment ----
-        self.ENV: str = _env_str("ENV", "dev").lower()
+        self.ENV: str = _env_str("ENV", "production").lower()
         self.IS_PROD: bool = self.ENV in self.PROD_ENVS
 
         # ---- Required ----

@@ -31,5 +31,14 @@ def reset_database(owner_id: str | None = None):
 
 
 if __name__ == "__main__":
+    if "--force" not in sys.argv:
+        print("=" * 60)
+        print(" WARNING: This will permanently ERASE all Munim Ji data!")
+        print("=" * 60)
+        confirm = input("Are you sure? Type 'YES' to proceed: ").strip()
+        if confirm != "YES":
+            print("Operation cancelled.")
+            sys.exit(0)
+
     target = sys.argv[1] if len(sys.argv) > 1 else None
     reset_database(target)

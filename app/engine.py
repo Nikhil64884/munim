@@ -122,10 +122,16 @@ def _handle_reset_request(owner_id: str) -> dict:
 def _handle_reset_confirmation(owner_id: str, text: str) -> dict:
     consume_context(owner_id)
     if is_affirmative(text):
+        now_utc = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
         with get_db() as db:
-            db.query(Transaction).filter_by(owner_id=owner_id).delete()
-            db.query(Customer).filter_by(owner_id=owner_id).delete()
+            db.query(Transaction).filter_by(owner_id=owner_id).update(
+                {"is_deleted": 1, "deleted_at": now_utc}
+            )
+            db.query(Customer).filter_by(owner_id=owner_id).update(
+                {"is_deleted": 1, "deleted_at": now_utc}
+            )
             db.commit()
+            record_audit(owner_id=owner_id, action="RESET_ALL_DATA", details="User confirmed reset of transactions and customers")
         return {"reply": msg("RESET_SUCCESS"), "media_url": None, "data": None}
     return {"reply": msg("CONFIRM_CANCELLED"), "media_url": None, "data": None}
 
@@ -680,10 +686,10 @@ def _handle_all_customers(owner_id: str) -> dict:
         return {"reply": msg("SUMMARY_EMPTY"), "media_url": None, "data": None}
 
     lines = [msg("SUMMARY_HEADER")]
-    total = 0
+    # Accurate total over ALL customers
+    total = sum(c["balance_paise"] for c in customers)
     for c in customers[:20]:
         lines.append(msg("SUMMARY_LINE", name=c["name"], balance=format_inr(c["balance_paise"])))
-        total += c["balance_paise"]
     lines.append(msg("SUMMARY_TOTAL", total=format_inr(total)))
     return {"reply": "".join(lines), "media_url": None, "data": None}
 

@@ -35,7 +35,8 @@ def resolve_customer(owner_id: str, name: str) -> dict:
         return {"action": "ambiguous", "options": similar[:5], "name": name}
 
     # Single prefix match — reuse
-    if len(similar) == 1 and similar[0]["name"].lower().startswith(name.lower()):
+    # Exact match only - do not silently match prefix like "Ram" to "Ramesh Kumar"
+    if len(similar) == 1 and similar[0]["name"].strip().lower() == name.strip().lower():
         return {"action": "exact", "customer_id": similar[0]["id"], "name": similar[0]["name"]}
 
     # New customer

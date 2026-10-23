@@ -79,7 +79,7 @@ If name missing → transaction_type = "Clarification"
   "item_desc": str,
   "transaction_type": one of
     ["Debit","Sale","Credit","CashSale","Query","AllCustomers","DateSummary",
-     "Clarification","General","Export","Undo","Reset"],
+     "Clarification","General","Export","Undo","Reset","ReminderRequest","InventoryRequest"],
   "reply_message": str
 }
 
@@ -250,7 +250,7 @@ def process_text_input(text: str) -> dict | None:
                 response_format={"type": "json_object"},
             )
             content = completion.choices[0].message.content
-            logger.info(f"LLM in: {text[:100]} | out: {content[:200]}")
+            logger.info(f"LLM in: [PROMPT_PROCESSED_MASKED] | out: {content[:200]}")
             return _validate(_extract_json(content))
         except Exception as e:
             last_err = e

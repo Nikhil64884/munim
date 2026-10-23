@@ -283,9 +283,9 @@ def update_inventory_stock(owner_id: str, item_name: str, quantity_change: int) 
         row = db.query(Inventory).filter_by(owner_id=owner_id, item_name=item_name).first()
         if not row:
             return False
+        if row.current_stock + quantity_change < 0:
+            raise ValueError(f"Insufficient stock for '{item_name}': available {row.current_stock}, requested change {quantity_change}")
         row.current_stock += quantity_change
-        if row.current_stock < 0:
-            row.current_stock = 0  # don't go negative
         db.commit()
         return True
 
@@ -569,7 +569,7 @@ def add_transaction(
         db.commit()
         db.refresh(t)
         logger.info(
-            f"Tx id={t.id} owner={mask_phone(owner_id)} cust={customer_name} "
+            f"Tx id={t.id} owner={mask_phone(owner_id)} cust=*** "
             f"paise={amount_paise} type={type_}"
         )
         return t.id
@@ -666,7 +666,7 @@ def update_transaction(
                 raise ValueError(reason)
             row.amount_paise = amount_paise
         if item is not None:
-            row.item_desc = item
+            row.item_desc = sanitize_input_text(item)
         if type_ is not None:
             if type_ not in VALID_TRANSACTION_TYPES:
                 raise ValueError(f"Invalid type_ {type_}")

@@ -29,6 +29,19 @@ app = FastAPI(
     version="3.1.0",
     lifespan=lifespan,
 )
+# Initialize Sentry if configured
+if getattr(settings, "SENTRY_DSN", None):
+    try:
+        import sentry_sdk
+        sentry_sdk.init(
+            dsn=settings.SENTRY_DSN,
+            traces_sample_rate=0.1,
+            environment=getattr(settings, "ENV", "production"),
+        )
+        logger.info("Sentry monitoring initialized successfully.")
+    except Exception as _se:
+        logger.warning(f"Sentry init error: {_se}")
+
 
 # Wildcard origins cannot be combined with credentials. In production the
 # config validator requires an explicit allow-list.
@@ -48,3 +61,17 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(customers_router, prefix="/api")
 app.include_router(mobile_router, prefix="/api")
+
+@app.on_event("startup")
+async def _start_daily_backup_schedule():
+    import asyncio
+    async def _daily_backup_worker():
+        while True:
+            await asyncio.sleep(86400)  # Every 24 hours
+            try:
+                from app.services.backup import run_daily_backup
+                await asyncio.to_thread(run_daily_backup)
+                logger.info("Automatic daily backup completed successfully.")
+            except Exception as _be:
+                logger.error(f"Scheduled backup failed: {_be}")
+    asyncio.create_task(_daily_backup_worker())

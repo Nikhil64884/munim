@@ -1,3 +1,4 @@
+import asyncio
 """
 Voice service — client uploads audio, we transcribe via Groq Whisper.
 
@@ -95,7 +96,7 @@ async def transcribe_upload(file: UploadFile) -> tuple[str | None, str | None]:
                     return None, f"Audio too large (max {config.MAX_AUDIO_MB} MB)."
                 f.write(chunk)
 
-        transcript = transcribe_audio(temp_path)
+        transcript = await asyncio.to_thread(transcribe_audio, temp_path)
         if not transcript:
             return None, "Transcription failed."
         return transcript.strip() if isinstance(transcript, str) else transcript, None

@@ -111,10 +111,18 @@ async def chat(
 async def voice(
     request: Request,
     file: UploadFile = File(...),  # noqa: B008
+    client_msg_id: str | None = Form(None),
     owner_id: str = Depends(current_owner),
 ):
     if is_rate_limited(owner_id, request):
         raise HTTPException(429, msg("RATE_LIMITED"))
+
+    # Idempotency check for voice retry
+    message_sid = f"app:{owner_id}:{client_msg_id}" if client_msg_id else None
+    if message_sid:
+        first = await asyncio.to_thread(mark_message_processed, message_sid)
+        if not first:
+            raise HTTPException(409, "Duplicate voice message.")
 
     # Transcription (with size/MIME/extension validation)
     transcript, err = await transcribe_upload(file)

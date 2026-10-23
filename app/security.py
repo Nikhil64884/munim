@@ -92,7 +92,7 @@ def _check_bucket(
 def _client_ip(request: Request) -> str | None:
     """Use the direct peer address; forwarded headers are client-controlled."""
     if request.client:
-        return request.client.host
+        return (request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else "127.0.0.1"))
     return None
 
 
@@ -112,3 +112,12 @@ def _gc(buckets: dict[str, list[float]], now: float, window: int = 60):
         del buckets[k]
     if stale:
         logger.info(f"Rate-limit GC pruned {len(stale)} buckets.")
+
+REVOKED_TOKENS = set()
+
+def revoke_token(token: str):
+    if token:
+        REVOKED_TOKENS.add(token.strip())
+
+def is_token_revoked(token: str) -> bool:
+    return token.strip() in REVOKED_TOKENS
