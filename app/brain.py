@@ -1,3 +1,4 @@
+import re
 """
 Munim Ji AI — Brain Module.
 
@@ -254,10 +255,89 @@ def process_text_input(text: str) -> dict | None:
             return _validate(_extract_json(content))
         except Exception as e:
             last_err = e
+            err_str = str(e)
+            if "403" in err_str or "401" in err_str or "Access denied" in err_str:
+                logger.warning(f"Groq API key error ({e}). Switching immediately to smart rule parser.")
+                break
             if attempt < config.GROQ_MAX_RETRIES:
                 sleep = 0.5 * (2 ** attempt)
                 logger.warning(f"Groq attempt {attempt + 1} failed: {e}. Retry in {sleep}s.")
                 time.sleep(sleep)
 
     logger.error(f"Groq failed after retries: {last_err}", exc_info=True)
+    return _smart_rule_fallback(text)
+
+
+def _smart_rule_fallback(text: str) -> dict | None:
+    """Fallback parser for common accounting phrases when LLM is unavailable."""
+    t = text.strip()
+    tl = t.lower()
+
+    if any(w in tl for w in ["sale", "bikri", "aaj"]):
+        return {
+            "customer_name": "",
+            "amount": 0,
+            "item_desc": "today",
+            "transaction_type": "DateSummary",
+            "reply_message": "",
+        }
+    if any(w in tl for w in ["sabka", "all", "kul", "sab"]) and any(w in tl for w in ["udhaar", "hisaab", "baaki", "khata"]):
+        return {
+            "customer_name": "",
+            "amount": 0,
+            "item_desc": "",
+            "transaction_type": "AllCustomers",
+            "reply_message": "",
+        }
+
+    amt_match = re.search(r'\b(\d+(?:\.\d{1,2})?)\b', t)
+    amt = float(amt_match.group(1)) if amt_match else 0
+
+    tx_type = "Clarification"
+    desc = "Hisaab"
+    if any(w in tl for w in ["udhaar", "udhar", "baaki", "baki", "diye", "debit", "liye"]):
+        tx_type = "Debit"
+        desc = "Udhaar"
+    elif any(w in tl for w in ["jama", "jamaa", "mile", "credit", "aaye", "aaya", "pay", "karwaye", "karwaya"]):
+        tx_type = "Credit"
+        desc = "Jama"
+    elif any(w in tl for w in ["cash", "rokad", "nagad"]):
+        tx_type = "CashSale"
+        desc = "Cash Sale"
+
+    stop_words = {
+        "ko", "ne", "par", "se", "ka", "ki", "ke", "rupaye", "rupee", "rs", "inr",
+        "udhaar", "udhar", "jama", "jamaa", "cash", "rokad", "baki", "baaki",
+        "likho", "likh", "karo", "kar", "do", "karein", "karwaye", "karwaya",
+        "diya", "diye", "liye", "mila", "mile", "hisaab", "account", "khata", "kaam"
+    }
+    words = t.split()
+    name_words = []
+    for w in words:
+        clean_w = re.sub(r'[^a-zA-Z\u0900-\u097F]', '', w)
+        if clean_w.lower() in stop_words or re.match(r'^\d+$', w):
+            continue
+        if clean_w:
+            name_words.append(clean_w.capitalize())
+
+    name = " ".join(name_words)
+
+    if not name and amt > 0:
+        return {
+            "customer_name": "",
+            "amount": amt,
+            "item_desc": desc,
+            "transaction_type": "Clarification",
+            "reply_message": "Ji, kis grahak ke naam par hisaab likhna hai?",
+        }
+
+    if name and amt > 0 and tx_type in ["Debit", "Credit", "CashSale"]:
+        return {
+            "customer_name": name,
+            "amount": amt,
+            "item_desc": desc,
+            "transaction_type": tx_type,
+            "reply_message": "",
+        }
+
     return None
