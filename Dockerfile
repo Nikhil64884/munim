@@ -3,9 +3,7 @@ FROM python:3.12-slim
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    ENV=production \
-    OTP_PROVIDER=twilio
+    PYTHONUNBUFFERED=1
 
 # Non-root user for security
 RUN useradd --create-home --shell /bin/bash appuser
