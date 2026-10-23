@@ -1,11 +1,11 @@
-ENV ENV=production
-ENV OTP_PROVIDER=twilio
 FROM python:3.12-slim
 
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    ENV=production \
+    OTP_PROVIDER=twilio
 
 # Non-root user for security
 RUN useradd --create-home --shell /bin/bash appuser
@@ -25,4 +25,4 @@ USER appuser
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]
