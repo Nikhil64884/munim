@@ -8,7 +8,7 @@ POST /api/voice  multipart/form-data           → { transcript, reply, media_ur
 import asyncio
 import logging
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 
 from app.database import forget_message_processed, mark_message_processed

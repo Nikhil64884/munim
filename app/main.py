@@ -1,3 +1,5 @@
+import logging
+logger = logging.getLogger('MunimJi.main')
 """Munim Ji AI FastAPI application entrypoint."""
 
 from contextlib import asynccontextmanager
@@ -30,13 +32,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 # Initialize Sentry if configured
-if getattr(settings, "SENTRY_DSN", None):
+if getattr(config, "SENTRY_DSN", None):
     try:
         import sentry_sdk
         sentry_sdk.init(
-            dsn=settings.SENTRY_DSN,
+            dsn=config.SENTRY_DSN,
             traces_sample_rate=0.1,
-            environment=getattr(settings, "ENV", "production"),
+            environment=getattr(config, "ENV", "production"),
         )
         logger.info("Sentry monitoring initialized successfully.")
     except Exception as _se:
